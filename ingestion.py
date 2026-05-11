@@ -3,14 +3,12 @@ import pdfplumber
 import xmltodict
 from validador_dian import validar_factura_fisica
 from modelo_ia import inicializar_modelo, predecir_cuenta_contable
+from exportador_rpa import exportar_para_rpa 
 
 def procesar_pdf(ruta_archivo):
-    """Extrae el texto de un archivo PDF utilizando pdfplumber."""
     texto_extraido = ""
     try:
-        # Abrimos el PDF
         with pdfplumber.open(ruta_archivo) as pdf:
-            # Recorremos todas las páginas y extraemos el texto
             for pagina in pdf.pages:
                 texto_pagina = pagina.extract_text()
                 if texto_pagina:
@@ -20,75 +18,75 @@ def procesar_pdf(ruta_archivo):
         return f"Error al leer PDF: {e}"
 
 def procesar_xml(ruta_archivo):
-    """Lee un archivo XML y lo convierte en un diccionario de Python."""
     try:
         with open(ruta_archivo, 'r', encoding='utf-8') as archivo:
-            # xmltodict convierte el texto XML crudo en un diccionario estructurado
-            diccionario_xml = xmltodict.parse(archivo.read())
-            return diccionario_xml
+            return xmltodict.parse(archivo.read())
     except Exception as e:
         return f"Error al leer XML: {e}"
 
 def leer_facturas(carpeta_facturas, clasificador_ia):
-    """Recorre la carpeta de facturas y procesa cada archivo según su formato."""
-    print(f"--- Iniciando SIRA: Módulo de Ingestión en '{carpeta_facturas}' ---\n")
-
+    print(f"--- Iniciando SIRA: Módulo Central (Modo JSON) en '{carpeta_facturas}' ---\n")
     if not os.path.exists(carpeta_facturas):
         print(f"Error: La carpeta '{carpeta_facturas}' no existe.")
         return
 
-    # Obtenemos la lista de archivos en la carpeta
     archivos = os.listdir(carpeta_facturas)
-
     if not archivos:
-        print("La carpeta está vacía. ¡Agrega facturas de prueba!")
+        print("La carpeta está vacía.")
         return
+
+    # Lista que contendrá los objetos JSON
+    lote_para_rpa = []
 
     for archivo in archivos:
         ruta_completa = os.path.join(carpeta_facturas, archivo)
 
-        # Si es un PDF
         if archivo.lower().endswith('.pdf'):
             print(f"📄 Procesando PDF: {archivo}")
             texto = procesar_pdf(ruta_completa)
             
-            # --- FILTRO DIAN ---
             print("   🛡️  Ejecutando Auditoría DIAN...")
             es_valida, faltantes = validar_factura_fisica(texto)
             
             if es_valida:
-                print("   ✅ Factura APROBADA por la DIAN.")
-                
-                # --- NUEVO: CEREBRO IA ---
-                # Para la prueba, simularemos que extrajimos un concepto de la factura
+                print("   ✅ Factura APROBADA.")
                 concepto_prueba = "Compra de cemento, varillas y herramientas manuales"
-                print(f"   🧠 Analizando concepto con IA: '{concepto_prueba}'")
+                print(f"   🧠 Analizando IA: '{concepto_prueba}'")
                 
                 cuenta, confianza = predecir_cuenta_contable(clasificador_ia, concepto_prueba)
                 
-                print(f"   📊 Imputación Contable: {cuenta} (Seguridad: {confianza:.2f}%)")
+                # Estructura JSON para factura aprobada
+                lote_para_rpa.append({
+                    "id_archivo": archivo,
+                    "metadata": {
+                        "formato": "PDF",
+                        "estado": "APROBADO_DIAN"
+                    },
+                    "analisis_contable": {
+                        "concepto": concepto_prueba,
+                        "cuenta_sugerida": cuenta,
+                        "score_confianza": round(confianza / 100, 4)
+                    }
+                })
                 
             else:
-                print(f"   ❌ Factura RECHAZADA. Incumple ley colombiana.")
-                print(f"      Faltan los siguientes requisitos: {faltantes}")
-            print("-" * 50 + "\n")
+                print(f"   ❌ Factura RECHAZADA.")
+                # Estructura JSON para factura rechazada
+                lote_para_rpa.append({
+                    "id_archivo": archivo,
+                    "metadata": {
+                        "formato": "PDF",
+                        "estado": "RECHAZADO_DIAN"
+                    },
+                    "errores_encontrados": faltantes
+                })
+            print("-" * 50)
 
-        # Si es un XML
-        elif archivo.lower().endswith('.xml'):
-            print(f"🧾 Procesando XML: {archivo}")
-            datos = procesar_xml(ruta_completa)
-            print("   XML leído con éxito y convertido a estructura de datos.\n")
+    # Exportamos el lote final a JSON
+    exportar_para_rpa(lote_para_rpa)
 
-        else:
-            print(f"⚠️ Formato no soportado, se ignorará: {archivo}\n")
-
-# Punto de entrada del script
 if __name__ == "__main__":
     carpeta_prueba = "facturas_prueba"
-    
-    # Encendemos la IA antes de leer facturas
     modelo_sira = inicializar_modelo()
-    print("✅ IA Cargada y lista.\n")
-    
-    # Le pasamos el modelo a la función
+    print("✅ IA Cargada.\n")
     leer_facturas(carpeta_prueba, modelo_sira)
