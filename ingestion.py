@@ -2,6 +2,7 @@ import os
 import pdfplumber
 import xmltodict
 from validador_dian import validar_factura_fisica
+from modelo_ia import inicializar_modelo, predecir_cuenta_contable
 
 def procesar_pdf(ruta_archivo):
     """Extrae el texto de un archivo PDF utilizando pdfplumber."""
@@ -28,7 +29,7 @@ def procesar_xml(ruta_archivo):
     except Exception as e:
         return f"Error al leer XML: {e}"
 
-def leer_facturas(carpeta_facturas):
+def leer_facturas(carpeta_facturas, clasificador_ia):
     """Recorre la carpeta de facturas y procesa cada archivo según su formato."""
     print(f"--- Iniciando SIRA: Módulo de Ingestión en '{carpeta_facturas}' ---\n")
 
@@ -46,17 +47,27 @@ def leer_facturas(carpeta_facturas):
     for archivo in archivos:
         ruta_completa = os.path.join(carpeta_facturas, archivo)
 
-       # Si es un PDF
+        # Si es un PDF
         if archivo.lower().endswith('.pdf'):
             print(f"📄 Procesando PDF: {archivo}")
             texto = procesar_pdf(ruta_completa)
             
-            # --- NUEVO: FILTRO DIAN ---
+            # --- FILTRO DIAN ---
             print("   🛡️  Ejecutando Auditoría DIAN...")
             es_valida, faltantes = validar_factura_fisica(texto)
             
             if es_valida:
-                print("   ✅ Factura APROBADA por la DIAN. Lista para IA.")
+                print("   ✅ Factura APROBADA por la DIAN.")
+                
+                # --- NUEVO: CEREBRO IA ---
+                # Para la prueba, simularemos que extrajimos un concepto de la factura
+                concepto_prueba = "Compra de cemento, varillas y herramientas manuales"
+                print(f"   🧠 Analizando concepto con IA: '{concepto_prueba}'")
+                
+                cuenta, confianza = predecir_cuenta_contable(clasificador_ia, concepto_prueba)
+                
+                print(f"   📊 Imputación Contable: {cuenta} (Seguridad: {confianza:.2f}%)")
+                
             else:
                 print(f"   ❌ Factura RECHAZADA. Incumple ley colombiana.")
                 print(f"      Faltan los siguientes requisitos: {faltantes}")
@@ -74,4 +85,10 @@ def leer_facturas(carpeta_facturas):
 # Punto de entrada del script
 if __name__ == "__main__":
     carpeta_prueba = "facturas_prueba"
-    leer_facturas(carpeta_prueba)
+    
+    # Encendemos la IA antes de leer facturas
+    modelo_sira = inicializar_modelo()
+    print("✅ IA Cargada y lista.\n")
+    
+    # Le pasamos el modelo a la función
+    leer_facturas(carpeta_prueba, modelo_sira)
