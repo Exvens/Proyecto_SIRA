@@ -1,6 +1,7 @@
 import os
 import pdfplumber
 import xmltodict
+from validador_dian import validar_factura_fisica
 
 def procesar_pdf(ruta_archivo):
     """Extrae el texto de un archivo PDF utilizando pdfplumber."""
@@ -45,12 +46,21 @@ def leer_facturas(carpeta_facturas):
     for archivo in archivos:
         ruta_completa = os.path.join(carpeta_facturas, archivo)
 
-        # Si es un PDF
+       # Si es un PDF
         if archivo.lower().endswith('.pdf'):
             print(f"📄 Procesando PDF: {archivo}")
             texto = procesar_pdf(ruta_completa)
-            # Imprimimos un resumen (los primeros 200 caracteres) para verificar que leyó algo
-            print(f"   Contenido extraído (resumen): {texto[:200]}...\n")
+            
+            # --- NUEVO: FILTRO DIAN ---
+            print("   🛡️  Ejecutando Auditoría DIAN...")
+            es_valida, faltantes = validar_factura_fisica(texto)
+            
+            if es_valida:
+                print("   ✅ Factura APROBADA por la DIAN. Lista para IA.")
+            else:
+                print(f"   ❌ Factura RECHAZADA. Incumple ley colombiana.")
+                print(f"      Faltan los siguientes requisitos: {faltantes}")
+            print("-" * 50 + "\n")
 
         # Si es un XML
         elif archivo.lower().endswith('.xml'):
