@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2">
+    <ID>FE-1025</ID>
+    <IssueDate>23/03/2026</IssueDate>
+    
+    <!-- DATOS DEL PROVEEDOR (EMISOR) -->
+    <AccountingSupplierParty>
+        <Party>
+            <PartyName><Name>Aceros de la Montaña S.A.S.</Name></PartyName>
+            <CompanyID schemeName="NIT">900.123.456-1</CompanyID>
+        </Party>
+    </AccountingSupplierParty>
+    
+    <!-- DATOS DEL CLIENTE (TÚ - ADQUIRENTE) -->
+    <AccountingCustomerParty>
+        <Party>
+            <PartyName><Name>Ferretería El Gran Constructor J.E.G. S.A.S.</Name></PartyName>
+            <CompanyID schemeName="NIT">901.555.888-9</CompanyID>
+        </Party>
+    </AccountingCustomerParty>
+    
+    <LegalMonetaryTotal>
+        <LineExtensionAmount currencyID="COP">$35.985.000</LineExtensionAmount>
+        <TaxExclusiveAmount currencyID="COP">$35.985.000</TaxExclusiveAmount>
+        <TaxInclusiveAmount currencyID="COP">$42.822.150</TaxInclusiveAmount>
+        <PayableAmount currencyID="COP">$41.525.251</PayableAmount>
+    </LegalMonetaryTotal>
+</Invoice>

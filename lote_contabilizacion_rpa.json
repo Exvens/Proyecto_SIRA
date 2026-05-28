@@ -1,0 +1,14 @@
+[
+    {
+        "id_archivo": "FE-1025.pdf",
+        "metadata": {
+            "formato": "PDF",
+            "estado": "APROBADO_DIAN"
+        },
+        "analisis_contable": {
+            "concepto": "Compra de cemento, varillas y herramientas manuales",
+            "cuenta_sugerida": "Compra de Materiales de Construcción y Ferretería (Cuenta 1435)",
+            "score_confianza": 0.5641
+        }
+    }
+]
