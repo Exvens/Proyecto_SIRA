@@ -17,7 +17,7 @@ def preparar_datos_entrenamiento():
         df_cuentas = pd.read_excel(ruta_excel, sheet_name="Contabilizacion")
         df_cuentas.columns = df_cuentas.columns.str.strip()
         
-        col_llave_contab = 'Origen_Documento' # Cambia esto a 'No_Comprobante' si te da 0 facturas al final
+        col_llave_contab = 'Origen_Documento' 
         col_cuenta_contab = 'Cuenta_PUC'
         
         df_cuentas = df_cuentas[[col_llave_contab, col_cuenta_contab]]
@@ -47,7 +47,6 @@ def preparar_datos_entrenamiento():
         df_gastos = pd.read_excel(ruta_excel, sheet_name="Gastos_Administrativos")
         df_gastos.columns = df_gastos.columns.str.strip()
         
-        # 👉 EL ERROR ESTABA AQUÍ: En esta pestaña se llama ID_Gasto
         col_llave_gastos = 'ID_Gasto' 
         col_texto_gastos = 'Concepto_Gasto'
         
@@ -57,17 +56,30 @@ def preparar_datos_entrenamiento():
         datos_listos.append(df_g[['texto', 'etiqueta']])
 
         # ==========================================
-        # 4. EXPORTAR ARCHIVO FINAL
+        # 4. EXPORTAR ARCHIVO FINAL (AJUSTADO)
         # ==========================================
         print("⚙️ Uniendo y consolidando registros...")
         df_final = pd.concat(datos_listos, ignore_index=True)
         
+        # Eliminar nulos
         df_final = df_final.dropna(subset=['texto', 'etiqueta'])
+        
+        # Limpieza de etiquetas (Cuentas contables)
         df_final['etiqueta'] = df_final['etiqueta'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+        
+        # Limpieza estricta de textos
+        df_final['texto'] = df_final['texto'].astype(str).str.strip()
         df_final = df_final[df_final['texto'].str.lower() != 'nan']
         
+        # Eliminar filas duplicadas para evitar overfitting en el modelo
+        registros_antes = len(df_final)
+        df_final = df_final.drop_duplicates()
+        registros_despues = len(df_final)
+        print(f"🧹 Limpieza: Se eliminaron {registros_antes - registros_despues} registros duplicados.")
+        
+        # Exportar
         df_final.to_csv("datos_entrenamiento.csv", index=False, encoding="utf-8")
-        print(f"\n🎉 ¡ÉXITO TOTAL! Se creó 'datos_entrenamiento.csv' con {len(df_final)} facturas reales listas para entrenar.")
+        print(f"\n🎉 ¡ÉXITO TOTAL! Se creó 'datos_entrenamiento.csv' con {len(df_final)} facturas reales únicas listas para entrenar.")
 
     except Exception as e:
         print(f"\n⚠️ Ocurrió un error inesperado durante el cruce: {e}")
