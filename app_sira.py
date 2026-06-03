@@ -132,11 +132,18 @@ def procesar_xml_nativo(xml_bytes):
     return es_valido, faltantes, concepto_detectado
 
 
+# ==============================================================================
+# 🗂️ CONTROL DE PESTAÑAS Y MEMORIA VOLÁTIL DE SIRA
+# ==============================================================================
+tab_operacion, tab_entrenamiento = st.tabs(["📊 Operación Diaria", "🧠 Entrenamiento y Aprendizaje"])
+
+# Inicializamos la memoria de la sesión para que Streamlit recuerde las facturas procesadas
+if "lote_procesado" not in st.session_state:
+    st.session_state.lote_procesado = []
+
 # ==========================================
 # PESTAÑA 1: OPERACIÓN Y FEEDBACK HUMANO
 # ==========================================
-tab_operacion, tab_entrenamiento = st.tabs(["📊 Operación Diaria", "🧠 Entrenamiento y Aprendizaje"])
-
 with tab_operacion:
     st.markdown("Auditoría automatizada de archivos **PDF** y contenedores **XML** de la DIAN.")
     
@@ -146,7 +153,7 @@ with tab_operacion:
         if not archivos_subidos:
             st.warning("⚠️ Sube al menos una factura.")
         else:
-            lote_para_rpa = []
+            lote_temporal = []
             barra_progreso = st.progress(0)
             
             for i, archivo in enumerate(archivos_subidos):
@@ -169,41 +176,41 @@ with tab_operacion:
                             txt = pagina.extract_text()
                             if txt: texto_pdf += txt + "\n"
                     
-                    # 🛠️ NORMALIZACIÓN DE FECHA: Mapea sinónimos antes del validador estricto de la DIAN
+                    # Normalización de sinónimos de fecha antes del validador de la DIAN
                     import re
                     texto_normalizado_fecha = re.sub(r'fecha\s+de\s+expedición|expedición', 'Fecha de Emisión', texto_pdf, flags=re.IGNORECASE)
                     
                     es_valida, faltantes = validar_factura_fisica(texto_normalizado_fecha)
                     
-                    # Extraer mediante Máquina de Estados y luego limpiar números (Intacto)
+                    # Extraer mediante Máquina de Estados y limpiar números
                     bloque_tabla = extraer_conceptos_pdf(texto_pdf)
                     concepto_real = limpiar_concepto_para_ia(bloque_tabla)
                 
-    
-                # --- CLASIFICACIÓN ---
+                # --- CLASIFICACIÓN CON IA ---
                 if es_valida:
                     if not concepto_real or len(concepto_real) < 3:
                         concepto_real = "compra de mercancia o servicio general"
                         
                     cuenta, confianza = predecir_cuenta_contable(modelo_sira, concepto_real)
                     
-                    # Formateo ultra seguro para la interfaz gráfica
                     import math
                     if math.isnan(confianza):
                         confianza_print = "0.00%"
                     else:
                         confianza_print = f"{confianza:.2f}%"
                         
-                    lote_para_rpa.append({
+                    lote_temporal.append({
                         "Archivo": archivo.name,
+                        "Concepto Real": concepto_real,  # Texto completo para el panel inferior
                         "Concepto": concepto_real[:80] + "..." if len(concepto_real) > 80 else concepto_real,
                         "Cuenta IA": cuenta,
                         "Confianza": confianza_print
                     })
                 else:
                     motivo = ", ".join(faltantes) if faltantes else "Estructura inválida"
-                    lote_para_rpa.append({
+                    lote_temporal.append({
                         "Archivo": archivo.name,
+                        "Concepto Real": f"RECHAZADO: Falta {motivo}",
                         "Concepto": f"❌ RECHAZADO: Falta {motivo}",
                         "Cuenta IA": "Bloqueado",
                         "Confianza": "N/A"
@@ -211,30 +218,58 @@ with tab_operacion:
                 
                 barra_progreso.progress((i + 1) / len(archivos_subidos))
             
+            # Guardamos el lote en memoria y forzamos recarga limpia de la interfaz (Soporta versiones viejas y nuevas)
+            st.session_state.lote_procesado = lote_temporal
             st.success("✅ Procesamiento completado.")
-            st.dataframe(pd.DataFrame(lote_para_rpa), use_container_width=True)
+            try:
+                st.rerun()
+            except AttributeError:
+                st.experimental_rerun()
+
+    # --- DESPLEGAR TABLA DE RESULTADOS REALES ---
+    if st.session_state.lote_procesado:
+        st.dataframe(pd.DataFrame(st.session_state.lote_procesado)[["Archivo", "Concepto", "Cuenta IA", "Confianza"]], use_container_width=True)
 
     st.divider()
     
+    # --- SECCIÓN DE AUDITORÍA Y CORRECCIÓN INTERACTIVA ---
     st.subheader("✍️ Corregir a la IA (Añadir al historial)")
-    col1, col2 = st.columns(2)
-    with col1: concepto_corregido = st.text_input("Concepto de la Factura")
-    with col2: cuenta_correcta = st.selectbox("Selecciona la cuenta correcta", obtener_cuentas_desde_puc())
     
-    if st.button("💾 Guardar Corrección"):
-        if concepto_corregido:
-            codigo_cuenta = cuenta_correcta.split("Cuenta ")[-1].replace(")", "").strip()
-            existe = os.path.exists("datos_entrenamiento.csv")
-            with open("datos_entrenamiento.csv", 'a', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                if not existe: writer.writerow(['texto', 'etiqueta'])
-                writer.writerow([concepto_corregido, codigo_cuenta])
-            st.success(f"✅ ¡Guardado!")
-        else:
-            st.error("❌ Escribe el concepto.")
+    # Filtramos para interactuar únicamente con las facturas válidas
+    facturas_validas = [f for f in st.session_state.lote_procesado if f["Cuenta IA"] != "Bloqueado"]
+    
+    if not facturas_validas:
+        st.info("💡 Sube y procesa facturas válidas arriba para que aparezcan en el panel de corrección automática.")
+    else:
+        # Selector desplegable dinámico amarrado a los resultados de la tabla superior
+        opciones_selector = [f"{f['Archivo']} -> ({f['Concepto']})" for f in facturas_validas]
+        seleccion = st.selectbox("🎯 Selecciona la factura que deseas corregir o registrar en el historial:", opciones_selector)
+        
+        # Recuperamos la información exacta de la factura elegida en el menú
+        indice_seleccionado = opciones_selector.index(seleccion)
+        factura_elegida = facturas_validas[indice_seleccionado]
+        
+        col1, col2 = st.columns(2)
+        with col1: 
+            # El concepto se autorellena mágicamente con el texto real extraído de la factura seleccionada
+            concepto_corregido = st.text_input("Concepto extraído automáticamente (puedes editarlo si deseas):", value=factura_elegida["Concepto Real"])
+        with col2: 
+            cuenta_correcta = st.selectbox("Selecciona la cuenta correcta para este concepto", obtener_cuentas_desde_puc())
+        
+        if st.button("💾 Guardar Corrección y Aprender"):
+            if concepto_corregido:
+                codigo_cuenta = cuenta_correcta.split("Cuenta ")[-1].replace(")", "").strip()
+                existe = os.path.exists("datos_entrenamiento.csv")
+                with open("datos_entrenamiento.csv", 'a', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    if not existe: writer.writerow(['texto', 'etiqueta'])
+                    writer.writerow([concepto_corregido, codigo_cuenta])
+                st.success(f"✅ ¡Guardado con éxito! SIRA ha aprendido que '{concepto_corregido}' pertenece a la cuenta {codigo_cuenta}.")
+            else:
+                st.error("❌ El concepto no puede estar vacío.")
 
 # ==========================================
-# PESTAÑA 2: CARGA MASIVA
+# PESTAÑA 2: CARGA MASIVA (HISTÓRICO CSV)
 # ==========================================
 with tab_entrenamiento:
     st.header("⚙️ Panel de Entrenamiento")
